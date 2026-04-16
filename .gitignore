@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+frontend/dist/
+backend/dist/
+infrastructure/cdk.out/
+
+# Environment variables
+frontend/.env
+.env
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# CDK
+infrastructure/cdk.out/
+
+# Test results
+test-results/
+playwright-report/
+
+# TypeScript
+*.tsbuildinfo
