@@ -6,6 +6,10 @@ interface AvatarProps {
   size: 'sm' | 'lg';
 }
 
+/**
+ * Extracts up to 2 initials from a display name.
+ * Falls back to '?' for empty/whitespace-only strings.
+ */
 export function getInitials(displayName: string): string {
   const tokens = displayName.trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return '?';
@@ -17,6 +21,10 @@ const sizeStyles: Record<'sm' | 'lg', React.CSSProperties> = {
   lg: { width: 80, height: 80, lineHeight: '80px' },
 };
 
+/**
+ * Displays a user's avatar image, falling back to a coloured initials badge
+ * if no avatarUrl is set or the image fails to load.
+ */
 export default function Avatar({ user, size }: AvatarProps) {
   const [imgError, setImgError] = useState(false);
 

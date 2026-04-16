@@ -1,5 +1,9 @@
 import React from 'react';
 
+/**
+ * Displays the current API URL (from VITE_API_URL) in a fixed footer bar.
+ * Useful for debugging which environment the app is pointed at.
+ */
 const ApiUrlDisplay: React.FC = () => {
   // Use environment variable for API URL
   const apiUrl = import.meta.env.VITE_API_URL;

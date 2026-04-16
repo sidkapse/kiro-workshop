@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "name": "TSX Comment Quality Enforcer",
+  "description": "When a TSX file is saved, inspects the commenting level and adds comments directly in the file if they don't meet best practices",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.tsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A TSX file was just saved. Please review the file for comment quality and coverage. Check if:\n1. Complex logic, non-obvious code, or tricky expressions have explanatory comments\n2. React components have a brief comment describing their purpose and key props\n3. Custom hooks, context providers, and utility functions are documented\n4. Any workarounds or non-standard patterns are explained with a comment\n\nIf the commenting is insufficient or missing where it matters, edit the file directly to add appropriate comments following these best practices:\n- Use inline comments (`//`) for single-line explanations\n- Use block comments (`/* */`) or JSDoc (`/** */`) for component/function-level documentation\n- Do NOT over-comment obvious code (e.g., `// increment counter` above `count++`)\n- Keep comments concise and meaningful\n\nOnly modify the file if improvements are genuinely needed."
+  },
+  "workspaceFolderName": "kiro-workshop",
+  "shortName": "tsx-comment-quality"
+}
