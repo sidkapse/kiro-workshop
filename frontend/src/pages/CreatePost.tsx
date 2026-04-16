@@ -78,7 +78,7 @@ const CreatePost: React.FC = () => {
             className="btn-cancel"
             disabled={loading}
             onClick={() => {
-              if (content.trim() && !window.confirm('Discard your draft? Your changes will be lost.')) {
+              if (content.trim() && !window.confirm('Discard draft?')) {
                 return;
               }
               navigate('/');
