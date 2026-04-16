@@ -99,6 +99,24 @@ export const usersApi = {
     });
     return handleResponse(response);
   },
+
+  getAvatarUploadUrl: async (
+    userId: string,
+    contentType: string,
+    fileSize: number,
+    token: string
+  ): Promise<{ uploadUrl: string; avatarUrl: string }> => {
+    console.log(`Making getAvatarUploadUrl request to: ${API_URL}/users/${userId}/avatar`);
+    const response = await fetch(`${API_URL}/users/${userId}/avatar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ contentType, fileSize }),
+    });
+    return handleResponse(response);
+  },
 };
 
 // Posts API calls

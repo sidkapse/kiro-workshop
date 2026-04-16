@@ -26,6 +26,8 @@ export class AppStack extends cdk.Stack {
   public readonly api: apigateway.RestApi;
   public readonly websiteBucket: s3.Bucket;
   public readonly distribution: cloudfront.Distribution;
+  public readonly avatarBucket: s3.Bucket;
+  public readonly avatarDistribution: cloudfront.Distribution;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -51,7 +53,7 @@ export class AppStack extends cdk.Stack {
         requireSymbols: false
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: cdk.RemovalPolicy.DESTROY // For development only
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
     // User Pool Client
@@ -59,7 +61,7 @@ export class AppStack extends cdk.Stack {
       authFlows: {
         userPassword: true,
         userSrp: true,
-        adminUserPassword: true  // Enable ADMIN_USER_PASSWORD_AUTH flow
+        adminUserPassword: true
       },
       preventUserExistenceErrors: true
     });
@@ -73,7 +75,7 @@ export class AppStack extends cdk.Stack {
       }]
     });
 
-    // IAM Roles for authenticated and unauthenticated users
+    // IAM Roles for authenticated users
     const authenticatedRole = new iam.Role(this, 'AuthenticatedRole', {
       assumedBy: new iam.FederatedPrincipal(
         'cognito-identity.amazonaws.com',
@@ -89,7 +91,6 @@ export class AppStack extends cdk.Stack {
       )
     });
 
-    // Attach role to identity pool
     new cognito.CfnIdentityPoolRoleAttachment(this, 'IdentityPoolRoleAttachment', {
       identityPoolId: this.identityPool.ref,
       roles: {
@@ -97,28 +98,23 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // DynamoDB Users Table
+    // DynamoDB Tables
     this.usersTable = new dynamodb.Table(this, 'UsersTable', {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY // For development only
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
-
-    // Add GSI for username lookups
     this.usersTable.addGlobalSecondaryIndex({
       indexName: 'username-index',
       partitionKey: { name: 'username', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL
     });
 
-    // DynamoDB Posts Table
     this.postsTable = new dynamodb.Table(this, 'PostsTable', {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY // For development only
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
-
-    // Add GSI for user's posts
     this.postsTable.addGlobalSecondaryIndex({
       indexName: 'userId-index',
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
@@ -126,29 +122,23 @@ export class AppStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL
     });
 
-    // DynamoDB Likes Table
     this.likesTable = new dynamodb.Table(this, 'LikesTable', {
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'postId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY // For development only
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
-
-    // Add GSI for post's likes
     this.likesTable.addGlobalSecondaryIndex({
       indexName: 'postId-index',
       partitionKey: { name: 'postId', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL
     });
 
-    // DynamoDB Comments Table
     this.commentsTable = new dynamodb.Table(this, 'CommentsTable', {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY // For development only
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
-
-    // Add GSI for post's comments
     this.commentsTable.addGlobalSecondaryIndex({
       indexName: 'postId-index',
       partitionKey: { name: 'postId', type: dynamodb.AttributeType.STRING },
@@ -156,20 +146,52 @@ export class AppStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL
     });
 
-    // DynamoDB Follows Table
     this.followsTable = new dynamodb.Table(this, 'FollowsTable', {
       partitionKey: { name: 'followerId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'followeeId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY // For development only
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
-
-    // Add GSI for followee's followers
     this.followsTable.addGlobalSecondaryIndex({
       indexName: 'followee-index',
       partitionKey: { name: 'followeeId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'followerId', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL
+    });
+
+    // S3 bucket for avatar storage — must be defined before the Lambda that references it
+    this.avatarBucket = new s3.Bucket(this, 'AvatarBucket', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.PUT],
+          allowedOrigins: ['*'],
+          allowedHeaders: ['*'],
+        },
+      ],
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const avatarOriginAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'AvatarOriginAccessIdentity', {
+      comment: 'Allow CloudFront to access the Avatar S3 bucket'
+    });
+    this.avatarBucket.grantRead(avatarOriginAccessIdentity);
+
+    this.avatarDistribution = new cloudfront.Distribution(this, 'AvatarDistribution', {
+      defaultBehavior: {
+        origin: new origins.S3Origin(this.avatarBucket, {
+          originAccessIdentity: avatarOriginAccessIdentity
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: new cloudfront.CachePolicy(this, 'AvatarCachePolicy', {
+          maxTtl: cdk.Duration.days(1),
+        }),
+      },
+    });
+
+    new cdk.CfnOutput(this, 'AvatarCdnDomain', {
+      value: this.avatarDistribution.distributionDomainName,
+      description: 'CloudFront domain for avatar CDN'
     });
 
     // API Gateway
@@ -184,7 +206,7 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for registration
+    // Lambda functions
     const registerFunction = new lambda.Function(this, 'RegisterFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'register.handler',
@@ -196,7 +218,6 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for login
     const loginFunction = new lambda.Function(this, 'LoginFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'login.handler',
@@ -208,7 +229,6 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for getting user profile
     const getProfileFunction = new lambda.Function(this, 'GetProfileFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'getProfile.handler',
@@ -218,7 +238,6 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for updating user profile
     const updateProfileFunction = new lambda.Function(this, 'UpdateProfileFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'updateProfile.handler',
@@ -228,7 +247,6 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for following a user
     const followUserFunction = new lambda.Function(this, 'FollowUserFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'followUser.handler',
@@ -239,7 +257,6 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for unfollowing a user
     const unfollowUserFunction = new lambda.Function(this, 'UnfollowUserFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'unfollowUser.handler',
@@ -250,7 +267,6 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for checking if following a user
     const checkFollowingFunction = new lambda.Function(this, 'CheckFollowingFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'checkFollowing.handler',
@@ -261,7 +277,6 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for creating posts
     const createPostFunction = new lambda.Function(this, 'CreatePostFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'createPost.handler',
@@ -272,7 +287,6 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for getting posts
     const getPostsFunction = new lambda.Function(this, 'GetPostsFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'getPosts.handler',
@@ -283,7 +297,6 @@ export class AppStack extends cdk.Stack {
       }
     });
 
-    // Lambda function for liking posts
     const likePostFunction = new lambda.Function(this, 'LikePostFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'likePost.handler',
@@ -295,9 +308,19 @@ export class AppStack extends cdk.Stack {
       }
     });
 
+    // Avatar Lambda — defined after avatarBucket and avatarDistribution
+    const getAvatarUploadUrlFunction = new lambda.Function(this, 'GetAvatarUploadUrlFunction', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'getAvatarUploadUrl.handler',
+      code: lambda.Code.fromAsset(getLambdaPackagePath('getAvatarUploadUrl')),
+      environment: {
+        AVATAR_BUCKET_NAME: this.avatarBucket.bucketName,
+        AVATAR_CDN_DOMAIN: this.avatarDistribution.distributionDomainName,
+        USERS_TABLE: this.usersTable.tableName
+      }
+    });
 
-
-    // Grant permissions to Lambda functions
+    // Grant permissions
     this.userPool.grant(registerFunction, 'cognito-idp:AdminCreateUser', 'cognito-idp:AdminSetUserPassword');
     this.userPool.grant(loginFunction, 'cognito-idp:AdminInitiateAuth', 'cognito-idp:GetUser');
     this.usersTable.grantReadWriteData(registerFunction);
@@ -306,10 +329,10 @@ export class AppStack extends cdk.Stack {
     this.usersTable.grantReadWriteData(updateProfileFunction);
     this.usersTable.grantReadWriteData(followUserFunction);
     this.usersTable.grantReadWriteData(unfollowUserFunction);
-    this.usersTable.grantReadData(getPostsFunction);  // Add read permission for Users table
-    this.usersTable.grantReadData(createPostFunction);  // Add read permission for Users table
-    this.usersTable.grantReadData(likePostFunction);  // Add read permission for Users table
-    this.usersTable.grantReadData(checkFollowingFunction);  // Add read permission for Users table
+    this.usersTable.grantReadData(getPostsFunction);
+    this.usersTable.grantReadData(createPostFunction);
+    this.usersTable.grantReadData(likePostFunction);
+    this.usersTable.grantReadData(checkFollowingFunction);
     this.followsTable.grantReadWriteData(followUserFunction);
     this.followsTable.grantReadWriteData(unfollowUserFunction);
     this.followsTable.grantReadData(checkFollowingFunction);
@@ -317,12 +340,14 @@ export class AppStack extends cdk.Stack {
     this.postsTable.grantReadData(getPostsFunction);
     this.postsTable.grantReadWriteData(likePostFunction);
     this.likesTable.grantReadWriteData(likePostFunction);
+    this.avatarBucket.grantPut(getAvatarUploadUrlFunction);
+    this.usersTable.grantReadData(getAvatarUploadUrlFunction);
 
     // API Gateway endpoints
     const auth = this.api.root.addResource('auth');
     const register = auth.addResource('register');
     register.addMethod('POST', new apigateway.LambdaIntegration(registerFunction));
-    
+
     const login = auth.addResource('login');
     login.addMethod('POST', new apigateway.LambdaIntegration(loginFunction));
 
@@ -331,15 +356,24 @@ export class AppStack extends cdk.Stack {
     userId.addMethod('GET', new apigateway.LambdaIntegration(getProfileFunction));
     userId.addMethod('PUT', new apigateway.LambdaIntegration(updateProfileFunction));
 
-    // Follow/unfollow endpoints
     const follow = userId.addResource('follow');
     follow.addMethod('POST', new apigateway.LambdaIntegration(followUserFunction));
-    
+
     const unfollow = userId.addResource('unfollow');
     unfollow.addMethod('POST', new apigateway.LambdaIntegration(unfollowUserFunction));
-    
+
     const following = userId.addResource('following');
     following.addMethod('GET', new apigateway.LambdaIntegration(checkFollowingFunction));
+
+    const avatar = userId.addResource('avatar', {
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: apigateway.Cors.DEFAULT_HEADERS,
+        allowCredentials: true,
+      },
+    });
+    avatar.addMethod('POST', new apigateway.LambdaIntegration(getAvatarUploadUrlFunction));
 
     const posts = this.api.root.addResource('posts');
     posts.addMethod('GET', new apigateway.LambdaIntegration(getPostsFunction));
@@ -354,20 +388,16 @@ export class AppStack extends cdk.Stack {
 
     // S3 bucket for frontend hosting
     this.websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // Keep all public access blocked
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development only
-      autoDeleteObjects: true, // For development only
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
-    // CloudFront Origin Access Identity
     const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'OriginAccessIdentity', {
       comment: 'Allow CloudFront to access the S3 bucket'
     });
-
-    // Grant read permissions to CloudFront OAI
     this.websiteBucket.grantRead(originAccessIdentity);
 
-    // CloudFront distribution
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
         origin: new origins.S3Origin(this.websiteBucket, {
@@ -376,17 +406,15 @@ export class AppStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       },
-      defaultRootObject: 'index.html', // Serve index.html as the root
+      defaultRootObject: 'index.html',
       errorResponses: [
         {
-          // Return index.html for 403 errors (when file not found)
           httpStatus: 403,
           responseHttpStatus: 200,
           responsePagePath: '/index.html',
           ttl: cdk.Duration.minutes(0)
         },
         {
-          // Return index.html for 404 errors (when file not found)
           httpStatus: 404,
           responseHttpStatus: 200,
           responsePagePath: '/index.html',
@@ -395,34 +423,29 @@ export class AppStack extends cdk.Stack {
       ]
     });
 
-    // Grant authenticated users access to their own user data
+    // Grant authenticated users access to their data
     this.usersTable.grantReadWriteData(authenticatedRole);
     this.postsTable.grantReadWriteData(authenticatedRole);
     this.likesTable.grantReadWriteData(authenticatedRole);
     this.commentsTable.grantReadWriteData(authenticatedRole);
     this.followsTable.grantReadWriteData(authenticatedRole);
 
-    // Output the configuration values for frontend .env file
-    // Order matches the .env file: VITE_API_URL, VITE_USER_POOL_ID, VITE_USER_POOL_CLIENT_ID, VITE_IDENTITY_POOL_ID
+    // Stack outputs
     new cdk.CfnOutput(this, 'ViteApiUrl', {
       value: this.api.url,
       description: 'API Gateway endpoint URL'
     });
-
     new cdk.CfnOutput(this, 'ViteUserPoolId', {
       value: this.userPool.userPoolId,
       description: 'Cognito User Pool ID'
     });
-
     new cdk.CfnOutput(this, 'ViteUserPoolClientId', {
       value: this.userPoolClient.userPoolClientId,
       description: 'Cognito User Pool Client ID'
     });
-
     new cdk.CfnOutput(this, 'ViteIdentityPoolId', {
       value: this.identityPool.ref,
       description: 'Cognito Identity Pool ID'
     });
-
   }
 }

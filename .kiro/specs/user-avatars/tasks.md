@@ -6,14 +6,14 @@ Implement avatar support across the stack: a new `getAvatarUploadUrl` Lambda for
 
 ## Tasks
 
-- [~] 1. Add infrastructure for avatar storage and delivery
+- [x] 1. Add infrastructure for avatar storage and delivery
   - Add `AvatarBucket` S3 bucket to `AppStack` with `BlockPublicAccess.BLOCK_ALL`, CORS policy allowing PUT from all origins, and `RemovalPolicy.DESTROY`
   - Add a new CloudFront distribution (`AvatarDistribution`) backed by `AvatarBucket` using an `OriginAccessIdentity`, with `maxTtl: Duration.days(1)`
   - Output `AvatarCdnDomain` as a `CfnOutput` so the Lambda environment variable can be set
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [~] 2. Implement `getAvatarUploadUrl` Lambda
-  - [~] 2.1 Create `backend/src/functions/users/getAvatarUploadUrl.js`
+- [x] 2. Implement `getAvatarUploadUrl` Lambda
+  - [x] 2.1 Create `backend/src/functions/users/getAvatarUploadUrl.js`
     - Extract `contentType` and `fileSize` from the parsed request body
     - Implement `isValidContentType(contentType)` — returns `true` iff value is one of `"image/jpeg"`, `"image/png"`, `"image/gif"`
     - Implement `isValidFileSize(fileSize)` — returns `true` iff `fileSize > 0 && fileSize <= 5_242_880`
@@ -39,21 +39,21 @@ Implement avatar support across the stack: a new `getAvatarUploadUrl` Lambda for
     - **Validates: Requirements 1.5**
     - Use `fast-check` to generate pairs of UUID strings `(requesterId, targetId)`; assert the handler returns 200 iff they are equal and 403 otherwise
 
-- [~] 3. Wire `getAvatarUploadUrl` Lambda into CDK stack
+- [x] 3. Wire `getAvatarUploadUrl` Lambda into CDK stack
   - Add `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` as dependencies in `backend/package.json`
   - Define `GetAvatarUploadUrlFunction` in `app-stack.ts` with env vars `AVATAR_BUCKET_NAME`, `AVATAR_CDN_DOMAIN`, and `USERS_TABLE`
   - Grant `s3:PutObject` on `AvatarBucket` and `dynamodb:GetItem` on `UsersTable` to the function
   - Add API route `POST /users/{userId}/avatar` → `GetAvatarUploadUrlFunction` (reuse the existing `userId` resource)
   - _Requirements: 1.1, 5.1, 5.2, 5.3, 5.4_
 
-- [~] 4. Add `getAvatarUploadUrl` to the frontend API service
+- [x] 4. Add `getAvatarUploadUrl` to the frontend API service
   - Add `getAvatarUploadUrl(userId, contentType, fileSize, token)` method to `usersApi` in `frontend/src/services/api.ts`
   - Method POSTs `{ contentType, fileSize }` to `${API_URL}/users/${userId}/avatar` with `Authorization` header
   - Returns `Promise<{ uploadUrl: string; avatarUrl: string }>`
   - _Requirements: 1.1, 4.4_
 
-- [~] 5. Implement the `Avatar` React component
-  - [~] 5.1 Create `frontend/src/components/Avatar.tsx`
+- [x] 5. Implement the `Avatar` React component
+  - [x] 5.1 Create `frontend/src/components/Avatar.tsx`
     - Accept `{ user: Pick<User, 'displayName' | 'avatarUrl'>, size: 'sm' | 'lg' }` props
     - Render `<img>` when `avatarUrl` is set; attach `onError` handler that switches to initials fallback
     - Implement `getInitials(displayName: string): string` — split on whitespace, take first letter of each token, uppercase, join, truncate to 2 chars; return `"?"` for empty/whitespace input
@@ -71,20 +71,20 @@ Implement avatar support across the stack: a new `getAvatarUploadUrl` Lambda for
     - **Validates: Requirements 2.4, 3.1, 3.2**
     - Use `fast-check` to generate arbitrary `User` objects (with and without `avatarUrl`) and `size` values; assert the rendered root element has width/height equal to 40 px for `"sm"` and 80 px for `"lg"`
 
-- [~] 6. Checkpoint — Ensure Avatar component and Lambda logic are correct
+- [x] 6. Checkpoint — Ensure Avatar component and Lambda logic are correct
   - Ensure all tests pass, ask the user if questions arise.
 
-- [~] 7. Add avatar display to the Feed
+- [x] 7. Add avatar display to the Feed
   - In `frontend/src/pages/Feed.tsx`, import `Avatar` and render `<Avatar user={post.user} size="sm" />` inside each post card's header, alongside the existing author link
   - Guard the render so it only shows when `post.user` is defined (existing behaviour already fetches user per post)
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [~] 8. Add avatar display and upload control to the Profile page
-  - [~] 8.1 Add avatar display to `frontend/src/pages/Profile.tsx`
+- [x] 8. Add avatar display and upload control to the Profile page
+  - [x] 8.1 Add avatar display to `frontend/src/pages/Profile.tsx`
     - Import `Avatar` and render `<Avatar user={user} size="lg" />` in the profile header (both view and edit modes)
     - _Requirements: 3.1, 3.2, 3.3_
 
-  - [ ] 8.2 Add client-side file validation helper
+  - [x] 8.2 Add client-side file validation helper
     - Implement `validateAvatarFile(file: File): { valid: boolean; error?: string }` in `Profile.tsx` (or a shared util)
     - Returns invalid with descriptive error if `file.type` is not in the allowed set or `file.size > 5_242_880`
     - _Requirements: 4.2, 4.3_
@@ -94,14 +94,14 @@ Implement avatar support across the stack: a new `getAvatarUploadUrl` Lambda for
     - **Validates: Requirements 4.2, 4.3**
     - Use `fast-check` to generate arbitrary `{ type: string, size: number }` objects; assert `validateAvatarFile` returns valid iff type is in the allowed set AND size ≤ 5,242,880
 
-  - [ ] 8.4 Add avatar upload control to `Profile.tsx`
+  - [x] 8.4 Add avatar upload control to `Profile.tsx`
     - Show a file `<input accept="image/jpeg,image/png,image/gif">` and upload button only when `isOwnProfile`
     - On file selection, run `validateAvatarFile`; display inline error and abort if invalid (_Requirements: 4.2, 4.3_)
     - On valid selection: disable the control and show a loading indicator, call `usersApi.getAvatarUploadUrl`, PUT the file directly to the pre-signed URL using `fetch`, then call `usersApi.updateProfile` with `{ avatarUrl }`, update local `user` state, and re-enable the control (_Requirements: 4.4, 4.5_)
     - On any failure, display an error message and re-enable the control (_Requirements: 4.6_)
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
 
-- [ ] 9. Final checkpoint — Ensure all tests pass
+- [x] 9. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

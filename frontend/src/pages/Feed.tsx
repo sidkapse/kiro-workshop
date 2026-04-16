@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { Post } from '../types/post';
 import { postsApi, usersApi } from '../services/api';
+import Avatar from '../components/Avatar';
 
 const Feed: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -130,10 +131,13 @@ const Feed: React.FC = () => {
                       className="post-card"
                     >
                       <div className="post-header">
-                        <Link to={`/profile/${post.userId}`} className="user-link">
-                          {post.user ? post.user.displayName : 'Unknown User'}
-                        </Link>
-                        <span className="post-date">{formatDate(post.createdAt)}</span>
+                        {post.user && <Avatar user={post.user} size="sm" />}
+                        <div className="post-header-meta">
+                          <Link to={`/profile/${post.userId}`} className="user-link">
+                            {post.user ? post.user.displayName : 'Unknown User'}
+                          </Link>
+                          <span className="post-date">{formatDate(post.createdAt)}</span>
+                        </div>
                       </div>
                       <div className="post-content">{post.content}</div>
                       <div className="post-footer">
@@ -142,9 +146,9 @@ const Feed: React.FC = () => {
                           className={`like-button ${post.liked ? 'liked' : ''}`}
                           disabled={post.liked}
                         >
-                          {post.likesCount} {post.likesCount === 1 ? 'Like' : 'Likes'}
+                          {post.liked ? '♥' : '♡'} {post.likesCount} {post.likesCount === 1 ? 'Like' : 'Likes'}
                         </button>
-                        <span>{post.commentsCount} {post.commentsCount === 1 ? 'Comment' : 'Comments'}</span>
+                        <span>💬 {post.commentsCount} {post.commentsCount === 1 ? 'Comment' : 'Comments'}</span>
                       </div>
                     </div>
                   );
@@ -152,10 +156,13 @@ const Feed: React.FC = () => {
                   return (
                     <div key={post.id} className="post-card">
                       <div className="post-header">
-                        <Link to={`/profile/${post.userId}`} className="user-link">
-                          {post.user ? post.user.displayName : 'Unknown User'}
-                        </Link>
-                        <span className="post-date">{formatDate(post.createdAt)}</span>
+                        {post.user && <Avatar user={post.user} size="sm" />}
+                        <div className="post-header-meta">
+                          <Link to={`/profile/${post.userId}`} className="user-link">
+                            {post.user ? post.user.displayName : 'Unknown User'}
+                          </Link>
+                          <span className="post-date">{formatDate(post.createdAt)}</span>
+                        </div>
                       </div>
                       <div className="post-content">{post.content}</div>
                       <div className="post-footer">
@@ -164,9 +171,9 @@ const Feed: React.FC = () => {
                           className={`like-button ${post.liked ? 'liked' : ''}`}
                           disabled={post.liked}
                         >
-                          {post.likesCount} {post.likesCount === 1 ? 'Like' : 'Likes'}
+                          {post.liked ? '♥' : '♡'} {post.likesCount} {post.likesCount === 1 ? 'Like' : 'Likes'}
                         </button>
-                        <span>{post.commentsCount} {post.commentsCount === 1 ? 'Comment' : 'Comments'}</span>
+                        <span>💬 {post.commentsCount} {post.commentsCount === 1 ? 'Comment' : 'Comments'}</span>
                       </div>
                     </div>
                   );

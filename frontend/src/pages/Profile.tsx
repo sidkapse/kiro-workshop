@@ -4,6 +4,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { User } from '../types/user';
 import { Post } from '../types/post';
 import { usersApi, postsApi } from '../services/api';
+import Avatar from '../components/Avatar';
+
+export function validateAvatarFile(file: File): { valid: boolean; error?: string } {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+  if (!allowedTypes.includes(file.type)) {
+    return { valid: false, error: 'Invalid file type. Allowed: JPEG, PNG, GIF' };
+  }
+  if (file.size > 5_242_880) {
+    return { valid: false, error: 'File size exceeds 5 MB limit' };
+  }
+  return { valid: true };
+}
 
 const Profile: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -18,6 +30,8 @@ const Profile: React.FC = () => {
     bio: '',
   });
   const [isFollowing, setIsFollowing] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   const isOwnProfile = currentUser?.id === userId;
 
@@ -105,6 +119,39 @@ const Profile: React.FC = () => {
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId || !token) return;
+
+    const validation = validateAvatarFile(file);
+    if (!validation.valid) {
+      setAvatarError(validation.error ?? 'Invalid file');
+      return;
+    }
+
+    setAvatarUploading(true);
+    setAvatarError(null);
+
+    try {
+      const { uploadUrl, avatarUrl } = await usersApi.getAvatarUploadUrl(userId, file.type, file.size, token);
+
+      await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+
+      await usersApi.updateProfile(userId, { avatarUrl }, token);
+
+      setUser(prev => prev ? { ...prev, avatarUrl } : prev);
+    } catch (err) {
+      setAvatarError('Failed to upload avatar. Please try again.');
+      console.error('Error uploading avatar:', err);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleString();
@@ -126,37 +173,65 @@ const Profile: React.FC = () => {
     <div className="profile-page">
       <div className="profile-header">
         {isEditing ? (
-          <form onSubmit={handleSubmit} className="edit-profile-form">
-            <div className="form-group">
-              <label htmlFor="displayName">Display Name</label>
-              <input
-                type="text"
-                id="displayName"
-                name="displayName"
-                value={formData.displayName}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="bio">Bio</label>
-              <textarea
-                id="bio"
-                name="bio"
-                value={formData.bio}
-                onChange={handleInputChange}
-                rows={3}
-              />
-            </div>
-            
-            <div className="form-actions">
-              <button type="submit">Save</button>
-              <button type="button" onClick={() => setIsEditing(false)}>Cancel</button>
-            </div>
-          </form>
+          <>
+            <Avatar user={user} size="lg" />
+            {isOwnProfile && (
+              <div className="avatar-upload">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif"
+                  onChange={handleAvatarUpload}
+                  disabled={avatarUploading}
+                />
+                {avatarUploading && <span>Uploading...</span>}
+                {avatarError && <span className="error-message">{avatarError}</span>}
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="edit-profile-form">
+              <div className="form-group">
+                <label htmlFor="displayName">Display Name</label>
+                <input
+                  type="text"
+                  id="displayName"
+                  name="displayName"
+                  value={formData.displayName}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="bio">Bio</label>
+                <textarea
+                  id="bio"
+                  name="bio"
+                  value={formData.bio}
+                  onChange={handleInputChange}
+                  rows={3}
+                />
+              </div>
+              
+              <div className="form-actions">
+                <button type="submit">Save</button>
+                <button type="button" onClick={() => setIsEditing(false)}>Cancel</button>
+              </div>
+            </form>
+          </>
         ) : (
           <>
+            <Avatar user={user} size="lg" />
+            {isOwnProfile && (
+              <div className="avatar-upload">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif"
+                  onChange={handleAvatarUpload}
+                  disabled={avatarUploading}
+                />
+                {avatarUploading && <span>Uploading...</span>}
+                {avatarError && <span className="error-message">{avatarError}</span>}
+              </div>
+            )}
             <h2>{user.displayName}</h2>
             <p className="username">@{user.username}</p>
             {user.bio && <p className="bio">{user.bio}</p>}
